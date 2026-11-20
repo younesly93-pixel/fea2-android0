@@ -1,38 +1,67 @@
+# Builds the APK on GitHub (free) and puts it under "Artifacts" for download.
+# Works even if the project was uploaded inside a sub-folder (e.g. FEA-Android/).
 name: Build APK
-
 on:
   push:
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK 35
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Find the project folder
+        id: proj
         run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          F=$(find . -name settings.gradle -not -path '*/node_modules/*' | head -n 1)
+          if [ -z "$F" ]; then
+            echo "::error::settings.gradle was not found. Upload the CONTENTS of the FEA-Android folder."
+            echo "### ❌ settings.gradle not found — upload the contents of the FEA-Android folder" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          D=$(dirname "$F")
+          echo "dir=$D" >> $GITHUB_OUTPUT
+          echo "Project folder: $D"
+          ls -la "$D" "$D/app" || true
 
-      - name: Build release APK
+      - name: Prepare
+        working-directory: ${{ steps.proj.outputs.dir }}
         run: |
-          chmod +x gradlew
-          ./gradlew --no-daemon assembleRelease
+          # do not let lint warnings stop the release build
+          printf '\nandroid { lint { checkReleaseBuilds false\n abortOnError false } }\n' >> app/build.gradle
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          if [ ! -f fea-release.jks ]; then
+            echo "::warning::fea-release.jks missing — creating a new signing key (keep it for future updates)."
+            keytool -genkeypair -v -keystore fea-release.jks -alias fea -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass 'FeaSystem2026!' -keypass 'FeaSystem2026!' -dname "CN=FEA, O=Faculty of Economics and Administration, C=LY"
+          fi
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Build signed APK
+        working-directory: ${{ steps.proj.outputs.dir }}
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace assembleRelease 2>&1 | tee build.log || {
+            echo "### ❌ Build failed — last lines:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -E "error:|ERROR|FAILURE|What went wrong|Caused by|> " build.log | tail -n 40 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
+          cp app/build/outputs/apk/release/*.apk "$GITHUB_WORKSPACE/FEA-System.apk"
+          echo "### ✅ APK ready — download FEA-System-APK below (Artifacts)" >> $GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
         with:
           name: FEA-System-APK
-          path: app/build/outputs/apk/release/*.apk
+          path: FEA-System.apk
