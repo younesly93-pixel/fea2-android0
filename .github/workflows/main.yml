@@ -1,8 +1,8 @@
-# يبني ملف APK تلقائياً على GitHub عند رفع المشروع (مجاناً)، ويضعه في «Artifacts» للتنزيل.
 name: Build APK
 on:
   push:
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,6 +13,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Build signed APK
         run: |
           chmod +x gradlew
