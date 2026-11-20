@@ -1,0 +1,32 @@
+plugins {
+    id 'com.android.application'
+}
+android {
+    namespace 'ly.fea.system'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'ly.fea.system'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+    signingConfigs {
+        release {
+            storeFile rootProject.file(project.property('FEA_STORE_FILE'))
+            storePassword project.property('FEA_STORE_PASSWORD')
+            keyAlias project.property('FEA_KEY_ALIAS')
+            keyPassword project.property('FEA_KEY_PASSWORD')
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
