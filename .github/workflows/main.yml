@@ -15,7 +15,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      - name: Set up Android SDK (uses the SDK already on GitHub's machine)
+        run: |
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$SDK" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$SDK" >> $GITHUB_ENV
+          SM=$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -n 1)
+          echo "sdkmanager: $SM"
+          if [ -n "$SM" ]; then
+            yes | "$SM" --licenses > /dev/null || true
+            "$SM" "platform-tools" "platforms;android-35" "build-tools;35.0.0" || echo "::warning::sdkmanager could not install packages; Gradle will try to download them."
+          fi
 
       - uses: gradle/actions/setup-gradle@v4
         with:
